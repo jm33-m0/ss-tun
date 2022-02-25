@@ -1,2 +1,3 @@
 # ss-tun
-L3 proxy backed by Shadowsocks and DoH
+
+This script sets up a L3 proxy backed by Shadowsocks
