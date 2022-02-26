@@ -62,7 +62,9 @@ foreach ($gw_choice in $gws) {
     }
 }
 
-
+if (!(Test-Path -Path "logs")) {
+    New-Item -ItemType Directory -Path "logs"
+}
 $ss_proc = Start-Process -FilePath .\bin\sslocal.exe -ArgumentList "-c ss_config.json" -WindowStyle Hidden -RedirectStandardError .\logs\sslocal-error.log -RedirectStandardOutput .\logs\sslocal.log -PassThru
 while (!($ss_proc.Id -gt 0)) {
     Write-Host -ForegroundColor Blue "Waiting for Shadowsocks"
