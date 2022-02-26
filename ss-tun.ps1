@@ -15,6 +15,7 @@ if (Test-Path -Path $lock) {
     $gw_recovery = Get-Content -Path .\ss-tun.lock | ConvertFrom-Json
     $gw_re = $gw_recovery.gw
     $gw_idx_re = $gw_recovery.gw_ifindex
+    $dns_re = $gw_recovery.dns
 
     if ((Get-NetAdapter).Name -contains "tun114514") {
         # unset gw
@@ -26,7 +27,13 @@ if (Test-Path -Path $lock) {
         Remove-NetRoute -DestinationPrefix 10.0.0.0/8 -NextHop $gw_re -InterfaceIndex $gw_idx_re -Confirm:$false -ErrorAction SilentlyContinue
         Remove-NetRoute -DestinationPrefix 192.168.0.0/16 -NextHop $gw_re -InterfaceIndex $gw_idx_re -Confirm:$false -ErrorAction SilentlyContinue
         Remove-NetRoute -DestinationPrefix 172.16.0.0/12 -NextHop $gw_re -InterfaceIndex $gw_idx_re -Confirm:$false -ErrorAction SilentlyContinue
+        Remove-NetRoute -DestinationPrefix 101.4.0.0/14 -NextHop $gw_re -InterfaceIndex $gw_idx_re -Confirm:$false -ErrorAction SilentlyContinue
 
+
+        # restore DNS
+        Set-DnsClientServerAddress -InterfaceIndex $gw_idx_re -ServerAddresses $dns_re
+
+        # destroy tun device and stop all tasks
         Stop-Process -Name tun2socks
         Stop-Process -Name sslocal
         Stop-Process -Name doh-proxy
@@ -91,6 +98,7 @@ New-NetRoute -DestinationPrefix 172.16.0.0/12 -NextHop $gw -InterfaceIndex $gw_i
 New-NetRoute -DestinationPrefix 101.4.0.0/14 -NextHop $gw -InterfaceIndex $gw_ifindex -Confirm:$false -ErrorAction SilentlyContinue
 
 # take care of DNS
+$dns = (Get-DnsClientServerAddress -InterfaceIndex $gw_ifindex -AddressFamily IPv4).ServerAddresses
 Set-DnsClientServerAddress -InterfaceAlias tun114514 -ServerAddresses "127.0.0.1" -Confirm:$false
 Set-DnsClientServerAddress -InterfaceIndex $gw_ifindex -ServerAddresses "127.0.0.1" -Confirm:$false
 
@@ -99,7 +107,8 @@ Set-DnsClientServerAddress -InterfaceIndex $gw_ifindex -ServerAddresses "127.0.0
 $gw_config = @"
 {
     "gw": "$gw",
-    "gw_ifindex": "$gw_ifindex"
+    "gw_ifindex": "$gw_ifindex",
+    "dns": "$dns"
 }
 "@ 
 $gw_config | Set-Content -Path $lock
