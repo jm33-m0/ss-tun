@@ -19,10 +19,16 @@ is_cmd_exist() {
     }
 }
 
+[[ "$EUID" -eq 0 ]] || error "Run me as root"
+
 is_cmd_exist ip
 is_cmd_exist systemctl
 
-[[ "$EUID" -eq 0 ]] || error "Run me as root"
+(
+    command -v jq || {
+        apt install jq -y || yum install -y jq
+    }
+) || error "failed to install jq"
 
 (cp -avR ./bin/* /usr/local/bin && chmod 755 /usr/local/bin/*) || error "failed to install binaries"
 
