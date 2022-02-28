@@ -2,12 +2,10 @@
 
 info() {
     echo -e "\e[34m$1\e[0m"
-    exit 1
 }
 
 success() {
     echo -e "\e[32m$1\e[0m"
-    exit 1
 }
 
 error() {
