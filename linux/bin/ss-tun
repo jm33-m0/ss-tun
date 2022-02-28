@@ -1,0 +1,81 @@
+#!/bin/bash
+
+info() {
+    echo -e "\e[34m$1\e[0m"
+    exit 1
+}
+
+success() {
+    echo -e "\e[32m$1\e[0m"
+    exit 1
+}
+
+error() {
+    echo -e "\n\e[31m$1\e[0m\n"
+    exit 1
+}
+
+is_cmd_exist() {
+    command -v "$1" || {
+        error "command $1 not found"
+    }
+}
+
+is_cmd_exist ip
+is_cmd_exist tun2socks
+
+[[ "$1" = "stop" ]] && {
+    kill "$(cat /tmp/sslocal.pid)" 2>/dev/null
+    kill "$(cat /tmp/tun2socks.pid)" 2>/dev/null
+
+    # restore routes
+    ip route del '0.0.0.0/1'
+    ip route del '128.0.0.0/1'
+    ip route del '10.0.0.0/8'
+    ip route del '192.168.0.0/16'
+    ip route del '172.16.0.0/12'
+
+    exit 0
+}
+
+# start the proxy
+(
+    /usr/local/bin/sslocal -c /etc/ss-tun/config.json &
+    echo -ne "$!" >/tmp/sslocal.pid
+) || {
+    error "sslocal failed to run"
+}
+
+# start tun2socks
+(
+    tun2socks -device tun://tun114514 -proxy "socks5://127.0.0.1:1080" &
+    echo -ne "$!" >/tmp/tun2socks.pid
+) || {
+    error "tun2socks failed to run"
+}
+
+# wait for tun device to go up
+while true; do
+    (ip link | grep tun114514) && break
+    sleep 1
+    info "waiting for tun114514 to go up"
+done
+
+# ip address of tun114514
+tun_ip='11.11.11.11'
+ip link set dev tun1 up
+ip addr add "$tun_ip/32" dev tun114514 || {
+    error "failed to assign ip addr to tun114514, aborting"
+}
+
+# tun114514 as default route
+(ip route add '0.0.0.0/1' via "$tun_ip" dev tun114514 &&
+    ip route add '128.0.0.0/1' via "$tun_ip" dev tun114514) || {
+    error "gateway setup failed"
+}
+
+# bypass LAN
+gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
+ip route add 10.0.0.0/8 via "$gw"
+ip route add 192.168.0.0/16 via "$gw"
+ip route add 172.16.0.0/12 via "$gw"

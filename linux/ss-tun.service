@@ -1,0 +1,13 @@
+[Unit]
+Description=ss-tun L3 proxy
+After=network-online.target nss-lookup.target NetworkManager.service
+Wants=network-online.target nss-lookup.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/bin/ss-tun
+ExecStop=/usr/local/bin/ss-tun stop
+
+[Install]
+WantedBy=multi-user.target
