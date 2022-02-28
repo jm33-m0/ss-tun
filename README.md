@@ -21,6 +21,14 @@ As we all know, DNS in China is heavily polluted, it's necessary for us to use D
 
 ### Linux
 
+#### as a systemd service
+
 1. Edit `ss_config.json`
 2. Run `install.sh`
 3. Use `systemctl start/stop ss-tun.service` to toggle
+
+#### one-shot
+
+1. Edit `ss_config.json`
+2. Run `./ss-tun` to start
+2. Run `./ss-tun stop` to stop
