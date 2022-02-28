@@ -28,8 +28,15 @@ is_cmd_exist jq
 gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
 tun_ip='11.11.11.11'
 
+# parse config.json of Shadowsocks
+ss_config=/etc/ss-tun/config.json
+ss_server=$(jq '.server' <"$ss_config" | tr -d '"')
+ss_port=$(jq '.local_port' <"$ss_config")
+info "ss_server=$ss_server\nss_port=$ss_port"
+
 [[ "$1" = "stop" ]] && {
     kill "$(cat /tmp/sslocal.pid)" 2>/dev/null || pkill -9 sslocal
+    kill "$(cat /tmp/doh-proxy.pid)" 2>/dev/null || pkill -9 doh-proxy
     kill "$(cat /tmp/tun2socks.pid)" 2>/dev/null || pkill -9 tun2socks
 
     # restore routes
@@ -40,14 +47,23 @@ tun_ip='11.11.11.11'
     ip route del '172.16.0.0/12' via "$gw"
     ip route del "$ss_server/32" via "$gw"
 
+    # restore DNS
+    cp -av /etc/ss-tun/resolv.conf /etc
+
     exit 0
 }
 
-# parse config.json of Shadowsocks
-ss_config=/etc/ss-tun/config.json
-ss_server=$(jq '.server' <"$ss_config" | tr -d '"')
-ss_port=$(jq '.local_port' <"$ss_config")
-info "ss_server=$ss_server\nss_port=$ss_port"
+# start DoH proxy
+(
+    doh-proxy -listen '127.0.0.153:53' -endpoint 'https://1.1.1.1/dns-query' -no-ipv6 &
+    echo -ne "$!" >/tmp/doh-proxy.pid
+
+    # set up DNS
+    [[ -f /etc/ss-tun/resolv.conf ]] || mv /etc/resolv.conf /etc/ss-tun
+    echo "nameserver 127.0.0.153" >/etc/resolv.conf
+) || {
+    error "doh-proxy failed to run"
+}
 
 # start the proxy
 (
