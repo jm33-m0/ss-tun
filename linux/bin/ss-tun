@@ -62,7 +62,7 @@ done
 
 # ip address of tun114514
 tun_ip='11.11.11.11'
-ip link set dev tun1 up
+ip link set dev tun114514 up
 ip addr add "$tun_ip/32" dev tun114514 || {
     error "failed to assign ip addr to tun114514, aborting"
 }
