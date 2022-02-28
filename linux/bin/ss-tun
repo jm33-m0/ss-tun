@@ -23,6 +23,7 @@ is_cmd_exist() {
 
 is_cmd_exist ip
 is_cmd_exist tun2socks
+is_cmd_exist sslocal
 
 [[ "$1" = "stop" ]] && {
     kill "$(cat /tmp/sslocal.pid)" 2>/dev/null
@@ -79,3 +80,5 @@ gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
 ip route add 10.0.0.0/8 via "$gw"
 ip route add 192.168.0.0/16 via "$gw"
 ip route add 172.16.0.0/12 via "$gw"
+
+success "ss-tun activated"

@@ -29,6 +29,8 @@ As we all know, DNS in China is heavily polluted, it's necessary for us to use D
 
 #### one-shot
 
+Put required binaries in `$PATH`
+
 1. Edit `ss_config.json`
 2. Run `./ss-tun` to start
 2. Run `./ss-tun stop` to stop
