@@ -24,25 +24,30 @@ is_cmd_exist tun2socks
 is_cmd_exist sslocal
 is_cmd_exist jq
 
+# gateway
+gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
+tun_ip='11.11.11.11'
+
 [[ "$1" = "stop" ]] && {
     kill "$(cat /tmp/sslocal.pid)" 2>/dev/null || pkill -9 sslocal
     kill "$(cat /tmp/tun2socks.pid)" 2>/dev/null || pkill -9 tun2socks
 
     # restore routes
-    ip route del '0.0.0.0/1'
-    ip route del '128.0.0.0/1'
-    ip route del '10.0.0.0/8'
-    ip route del '192.168.0.0/16'
-    ip route del '172.16.0.0/12'
-    ip route del "$ss_server"
+    ip route del '0.0.0.0/1' via "$tun_ip"
+    ip route del '128.0.0.0/1' via "$tun_ip"
+    ip route del '10.0.0.0/8' via "$gw"
+    ip route del '192.168.0.0/16' via "$gw"
+    ip route del '172.16.0.0/12' via "$gw"
+    ip route del "$ss_server/32" via "$gw"
 
     exit 0
 }
 
 # parse config.json of Shadowsocks
-ss_config=/etc/ss-tun/ss_config.json
-ss_server=$(jq '.server' <"$ss_config")
+ss_config=/etc/ss-tun/config.json
+ss_server=$(jq '.server' <"$ss_config" | tr -d '"')
 ss_port=$(jq '.local_port' <"$ss_config")
+info "ss_server=$ss_server\nss_port=$ss_port"
 
 # start the proxy
 (
@@ -68,23 +73,21 @@ while true; do
 done
 
 # ip address of tun114514
-tun_ip='11.11.11.11'
 ip link set dev tun114514 up
 ip addr add "$tun_ip/32" dev tun114514 || {
     error "failed to assign ip addr to tun114514, aborting"
 }
+
+# bypass LAN
+ip route add 10.0.0.0/8 via "$gw"
+ip route add 192.168.0.0/16 via "$gw"
+ip route add 172.16.0.0/12 via "$gw"
+ip route add "$ss_server/32" via "$gw" || error "failed to add $ss_server route"
 
 # tun114514 as default route
 (ip route add '0.0.0.0/1' via "$tun_ip" dev tun114514 &&
     ip route add '128.0.0.0/1' via "$tun_ip" dev tun114514) || {
     error "gateway setup failed"
 }
-
-# bypass LAN
-gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
-ip route add 10.0.0.0/8 via "$gw"
-ip route add 192.168.0.0/16 via "$gw"
-ip route add 172.16.0.0/12 via "$gw"
-ip route add "$ss_server" via "$gw"
 
 success "ss-tun activated"
