@@ -22,6 +22,7 @@ is_cmd_exist() {
 is_cmd_exist ip
 is_cmd_exist tun2socks
 is_cmd_exist sslocal
+is_cmd_exist jq
 
 [[ "$1" = "stop" ]] && {
     kill "$(cat /tmp/sslocal.pid)" 2>/dev/null
@@ -33,13 +34,19 @@ is_cmd_exist sslocal
     ip route del '10.0.0.0/8'
     ip route del '192.168.0.0/16'
     ip route del '172.16.0.0/12'
+    ip route del "$ss_server"
 
     exit 0
 }
 
+# parse config.json of Shadowsocks
+ss_config=/etc/ss-tun/ss_config.json
+ss_server=$(jq '.server' <"$ss_config")
+ss_port=$(jq '.local_port' <"$ss_config")
+
 # start the proxy
 (
-    /usr/local/bin/sslocal -c /etc/ss-tun/config.json &
+    /usr/local/bin/sslocal -c "$ss_config" &
     echo -ne "$!" >/tmp/sslocal.pid
 ) || {
     error "sslocal failed to run"
@@ -47,7 +54,7 @@ is_cmd_exist sslocal
 
 # start tun2socks
 (
-    tun2socks -device tun://tun114514 -proxy "socks5://127.0.0.1:1080" &
+    tun2socks -device tun://tun114514 -proxy "socks5://127.0.0.1:$ss_port" &
     echo -ne "$!" >/tmp/tun2socks.pid
 ) || {
     error "tun2socks failed to run"
@@ -78,5 +85,6 @@ gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
 ip route add 10.0.0.0/8 via "$gw"
 ip route add 192.168.0.0/16 via "$gw"
 ip route add 172.16.0.0/12 via "$gw"
+ip route add "$ss_server" via "$gw"
 
 success "ss-tun activated"
