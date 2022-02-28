@@ -12,7 +12,15 @@ As we all know, DNS in China is heavily polluted, it's necessary for us to use D
 
 ## How to use
 
-- Edit `ss_config.json`
-- Run `ss-switch.bat`
-- Check output of the script, and test your connectivity
-- Run `ss-switch.bat` again to disable ss-tun, follow on-screen instructions
+### Windows (10 and above)
+
+1. Edit `ss_config.json`
+2. Run `ss-switch.bat`
+3. Check output of the script, and test your connectivity
+4. Run `ss-switch.bat` again to disable ss-tun, follow on-screen instructions
+
+### Linux
+
+1. Edit `ss_config.json`
+2. Run `install.sh`
+3. Use `systemctl start/stop ss-tun.service` to toggle
