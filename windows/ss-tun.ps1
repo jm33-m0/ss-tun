@@ -1,6 +1,6 @@
 $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
 if (!($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator))) {
-    Write-Host -ForegroundColor Red "I need Admin for this" 
+    Write-Host -ForegroundColor Red "I need Admin for this"
     exit 1
 }
 
@@ -8,6 +8,7 @@ $ss_gw = "11.11.11.11" # ip of the tun device
 $lock = "ss-tun.lock"
 $ss_config = Get-Content -Path .\ss_config.json | ConvertFrom-Json
 $ss_server = $ss_config.server + "/32"
+$ss_port = $ss_config.local_port
 
 if (Test-Path -Path $lock) {
     Write-Host -ForegroundColor Yellow "Seems like ss-tun is running"
@@ -47,7 +48,7 @@ if (Test-Path -Path $lock) {
     }
 }
 
-# recover gateway from lock file 
+# recover gateway from lock file
 $gw = $gw_re
 $gw_ifindex = $gw_idx_re
 
@@ -70,12 +71,12 @@ while (!($ss_proc.Id -gt 0)) {
     Write-Host -ForegroundColor Blue "Waiting for Shadowsocks"
     Start-Sleep -Seconds 1
 }
-Start-Process -FilePath .\bin\tun2socks.exe -ArgumentList "-loglevel error -device tun://tun114514 -proxy socks5://127.0.0.1:1080" -WindowStyle Hidden -RedirectStandardError .\logs\tun2socks-error.log -RedirectStandardOutput .\logs\tun2socks.log
+Start-Process -FilePath .\bin\tun2socks.exe -ArgumentList "-loglevel error -device tun://tun114514 -proxy socks5://127.0.0.1:$ss_port" -WindowStyle Hidden -RedirectStandardError .\logs\tun2socks-error.log -RedirectStandardOutput .\logs\tun2socks.log
 Start-Process -FilePath .\bin\doh-proxy.exe -ArgumentList "-endpoint https://1.1.1.1/dns-query" -WindowStyle Hidden -RedirectStandardError .\logs\doh-error.log -RedirectStandardOutput .\logs\doh.log
 
 
 while (!((Get-NetAdapter).Name -contains "tun114514")) {
-    Write-Host -ForegroundColor Blue "Waiting for tun114514 to go up" 
+    Write-Host -ForegroundColor Blue "Waiting for tun114514 to go up"
     Start-Sleep -Seconds 1
 }
 
@@ -112,7 +113,7 @@ $gw_config = @"
     "gw_ifindex": "$gw_ifindex",
     "dns": "$dns"
 }
-"@ 
+"@
 $gw_config | Set-Content -Path $lock
 
 Write-Host -ForegroundColor Green "If you see no errors, proceed to close this window and test your network"
