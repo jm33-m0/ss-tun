@@ -25,10 +25,8 @@ is_cmd_exist ip
 is_cmd_exist systemctl
 
 (
-    command -v jq || {
-        apt install jq -y || yum install -y jq
-    }
-) || error "failed to install jq"
+    apt install jq curl -y || yum install -y curl jq
+) || error "failed to install jq/curl"
 
 (cp -avR ./bin/* /usr/local/bin && chmod 755 /usr/local/bin/*) || error "failed to install binaries"
 
@@ -41,6 +39,12 @@ is_cmd_exist systemctl
     cp -avR ./ss-tun.service /etc/systemd/system/ss-tun.service &&
         systemctl daemon-reload
 ) || error "failed to install service"
+
+command -v curl && {
+    curl -o /etc/ss-tun/chnroute.txt https://raw.githubusercontent.com/jm33-m0/switchyomega-china-list/main/chnroute.txt
+}
+
+[[ -f /etc/ss-tun/chnroute.txt ]] || error "/etc/ss-tun/chnroute.txt not found, please download from https://raw.githubusercontent.com/jm33-m0/switchyomega-china-list/main/chnroute.txt"
 
 success "installed"
 success "systemctl start ss-tun"

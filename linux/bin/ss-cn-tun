@@ -1,0 +1,94 @@
+#!/bin/bash
+
+info() {
+    echo -e "\e[34m$1\e[0m"
+}
+
+success() {
+    echo -e "\e[32m$1\e[0m"
+}
+
+error() {
+    echo -e "\n\e[31m$1\e[0m\n"
+    exit 1
+}
+
+is_cmd_exist() {
+    command -v "$1" || {
+        error "command $1 not found"
+    }
+}
+
+is_cmd_exist ip
+is_cmd_exist tun2socks
+is_cmd_exist sslocal
+is_cmd_exist jq
+
+# gateway
+gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
+tun_ip='11.11.11.11'
+
+# parse config.json of Shadowsocks
+ss_config=/etc/ss-tun/config.json
+ss_server=$(jq '.server' <"$ss_config" | tr -d '"')
+ss_port=$(jq '.local_port' <"$ss_config")
+info "ss_server=$ss_server\nss_port=$ss_port"
+
+[[ "$1" = "stop" ]] && {
+    kill "$(cat /tmp/sslocal.pid)" 2>/dev/null || pkill -9 sslocal
+    kill "$(cat /tmp/tun2socks.pid)" 2>/dev/null || pkill -9 tun2socks
+
+    # restore routes
+    ip route del '10.0.0.0/8' via "$gw"
+    ip route del '192.168.0.0/16' via "$gw"
+    ip route del '172.16.0.0/12' via "$gw"
+    ip route del "$ss_server/32" via "$gw"
+
+    while read -r ip; do
+        ip route del "$ip" via "$tun_ip"
+    done </etc/ss-tun/chnroute.txt
+
+    exit 0
+}
+
+# start the proxy
+(
+    /usr/local/bin/sslocal -c "$ss_config" &
+    echo -ne "$!" >/tmp/sslocal.pid
+) || {
+    error "sslocal failed to run"
+}
+
+# start tun2socks
+(
+    tun2socks -device tun://tun114514 -proxy "socks5://127.0.0.1:$ss_port" &
+    echo -ne "$!" >/tmp/tun2socks.pid
+) || {
+    error "tun2socks failed to run"
+}
+
+# wait for tun device to go up
+while true; do
+    (ip link | grep tun114514) && break
+    sleep 1
+    info "waiting for tun114514 to go up"
+done
+
+# ip address of tun114514
+ip link set dev tun114514 up
+ip addr add "$tun_ip/32" dev tun114514 || {
+    error "failed to assign ip addr to tun114514, aborting"
+}
+
+# bypass LAN
+ip route add 10.0.0.0/8 via "$gw"
+ip route add 192.168.0.0/16 via "$gw"
+ip route add 172.16.0.0/12 via "$gw"
+ip route add "$ss_server/32" via "$gw" || error "failed to add $ss_server route"
+
+# tun114514 as chnroute
+while read -r ip; do
+    ip route add "$ip" via "$tun_ip"
+done </etc/ss-tun/chnroute.txt
+
+success "ss-cn-tun activated"
