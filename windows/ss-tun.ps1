@@ -7,7 +7,18 @@ if (!($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Admini
 $ss_gw = "11.11.11.11" # ip of the tun device
 $lock = "ss-tun.lock"
 $ss_config = Get-Content -Path .\ss_config.json | ConvertFrom-Json
-$ss_server = $ss_config.server + "/32"
+if ([bool]($ss_config.server -as [ipaddress])) {
+    $ss_server_ip = $ss_config.server
+    Write-Host "Server IP is $ss_server_ip"
+}
+else {
+    $ss_server_ip = (Resolve-DnsName -Name $ss_config.server -Type A).IPAddress
+}
+if (![bool]($ss_server_ip -as [ipaddress])) {
+    Write-Host -ForegroundColor Red "Cannot resolve server address"
+    exit 1
+}
+$ss_server = $ss_server_ip + "/32"
 $ss_port = $ss_config.local_port
 
 if (Test-Path -Path $lock) {
@@ -37,7 +48,6 @@ if (Test-Path -Path $lock) {
         # destroy tun device and stop all tasks
         Stop-Process -Name tun2socks
         Stop-Process -Name sslocal
-        Stop-Process -Name doh-proxy
     }
     Remove-Item -Path $lock
 
@@ -72,7 +82,6 @@ while (!($ss_proc.Id -gt 0)) {
     Start-Sleep -Seconds 1
 }
 Start-Process -FilePath .\bin\tun2socks.exe -ArgumentList "-loglevel error -device tun://tun114514 -proxy socks5://127.0.0.1:$ss_port" -WindowStyle Hidden -RedirectStandardError .\logs\tun2socks-error.log -RedirectStandardOutput .\logs\tun2socks.log
-Start-Process -FilePath .\bin\doh-proxy.exe -ArgumentList "-endpoint https://1.1.1.1/dns-query" -WindowStyle Hidden -RedirectStandardError .\logs\doh-error.log -RedirectStandardOutput .\logs\doh.log
 
 
 while (!((Get-NetAdapter).Name -contains "tun114514")) {
@@ -101,9 +110,10 @@ New-NetRoute -DestinationPrefix 172.16.0.0/12 -NextHop $gw -InterfaceIndex $gw_i
 New-NetRoute -DestinationPrefix 101.4.0.0/14 -NextHop $gw -InterfaceIndex $gw_ifindex -Confirm:$false -ErrorAction SilentlyContinue
 
 # take care of DNS
-$dns = (Get-DnsClientServerAddress -InterfaceIndex $gw_ifindex -AddressFamily IPv4).ServerAddresses
-Set-DnsClientServerAddress -InterfaceAlias tun114514 -ServerAddresses "127.0.0.1" -Confirm:$false
-Set-DnsClientServerAddress -InterfaceIndex $gw_ifindex -ServerAddresses "127.0.0.1" -Confirm:$false
+$dns_secure = "1.1.1.1"
+$dns_old = (Get-DnsClientServerAddress -InterfaceIndex $gw_ifindex -AddressFamily IPv4).ServerAddresses
+Set-DnsClientServerAddress -InterfaceAlias tun114514 -ServerAddresses $dns_secure -Confirm:$false
+Set-DnsClientServerAddress -InterfaceIndex $gw_ifindex -ServerAddresses $dns_secure -Confirm:$false
 
 # create lock file
 # when this file exists, we say ss-tun is already running
@@ -111,7 +121,7 @@ $gw_config = @"
 {
     "gw": "$gw",
     "gw_ifindex": "$gw_ifindex",
-    "dns": "$dns"
+    "dns": "$dns_old"
 }
 "@
 $gw_config | Set-Content -Path $lock
