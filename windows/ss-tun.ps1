@@ -6,21 +6,6 @@ if (!($currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Admini
 
 $ss_gw = "11.11.11.11" # ip of the tun device
 $lock = "ss-tun.lock"
-$ss_config = Get-Content -Path .\ss_config.json | ConvertFrom-Json
-if ([bool]($ss_config.server -as [ipaddress])) {
-    $ss_server_ip = $ss_config.server
-    Write-Host "Server IP is $ss_server_ip"
-}
-else {
-    $ss_server_ip = (Resolve-DnsName -Name $ss_config.server -Type A).IPAddress
-}
-if (![bool]($ss_server_ip -as [ipaddress])) {
-    Write-Host -ForegroundColor Red "Cannot resolve server address"
-    exit 1
-}
-$ss_server = $ss_server_ip + "/32"
-$ss_port = $ss_config.local_port
-
 if (Test-Path -Path $lock) {
     Write-Host -ForegroundColor Yellow "Seems like ss-tun is running"
     # read gw info from lock file
@@ -58,6 +43,24 @@ if (Test-Path -Path $lock) {
     }
 }
 
+$ss_config = Get-Content -Path .\ss_config.json | ConvertFrom-Json
+if ([bool]($ss_config.server -as [ipaddress])) {
+    $ss_server_ip = $ss_config.server
+    Write-Host "Server IP is $ss_server_ip"
+}
+else {
+    $ss_server_ip = (Resolve-DnsName -Server 223.5.5.5 -Name $ss_config.server -Type A).IPAddress
+}
+if (![bool]($ss_server_ip -as [ipaddress])) {
+    Write-Host -ForegroundColor Red "Cannot resolve server address"
+    exit 1
+}
+$ss_server = $ss_server_ip + "/32"
+$ss_port = $ss_config.local_port
+$ss_server_port = $ss_config.server_port
+$ss_password = $ss_config.password
+$ss_cipher = $ss_config.method
+
 # recover gateway from lock file
 $gw = $gw_re
 $gw_ifindex = $gw_idx_re
@@ -76,7 +79,7 @@ foreach ($gw_choice in $gws) {
 if (!(Test-Path -Path "logs")) {
     New-Item -ItemType Directory -Path "logs"
 }
-$ss_proc = Start-Process -FilePath .\bin\sslocal.exe -ArgumentList "-c ss_config.json" -WindowStyle Hidden -RedirectStandardError .\logs\sslocal-error.log -RedirectStandardOutput .\logs\sslocal.log -PassThru
+$ss_proc = Start-Process -FilePath .\bin\sslocal.exe -ArgumentList "-U -m ${ss_cipher} --dns 1.1.1.1 -s ${ss_server_ip}:${ss_server_port} -b 127.0.0.1:${ss_port} -k ${ss_password}" -WindowStyle Hidden -RedirectStandardError .\logs\sslocal-error.log -RedirectStandardOutput .\logs\sslocal.log -PassThru
 while (!($ss_proc.Id -gt 0)) {
     Write-Host -ForegroundColor Blue "Waiting for Shadowsocks"
     Start-Sleep -Seconds 1
