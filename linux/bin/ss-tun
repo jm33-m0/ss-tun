@@ -23,6 +23,7 @@ is_cmd_exist ip
 is_cmd_exist tun2socks
 is_cmd_exist sslocal
 is_cmd_exist jq
+is_cmd_exist resolvconf
 
 # gateway
 gw="$(/sbin/ip route | awk '/default via/ { print $3 }')"
