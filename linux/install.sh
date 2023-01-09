@@ -25,7 +25,7 @@ is_cmd_exist ip
 is_cmd_exist systemctl
 
 (
-    apt install jq curl -y || yum install -y curl jq
+    apt install jq curl resolvconf -y || yum install -y curl jq resolvconf
 ) || error "failed to install jq/curl"
 
 (cp -avR ./bin/* /usr/local/bin && chmod 755 /usr/local/bin/*) || error "failed to install binaries"
