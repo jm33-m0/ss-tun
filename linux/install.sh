@@ -33,7 +33,7 @@ is_cmd_exist systemctl
 (
     [[ -d /etc/ss-tun ]] || mkdir /etc/ss-tun
     cp -avR ./ss_config.json /etc/ss-tun/config.json
-) || error "failed to install ss config"
+) || error "failed to install ss config, please name your shadowsocks config file as ./ss_config.json"
 
 (
     cp -avR ./ss-tun.service /etc/systemd/system/ss-tun.service &&
