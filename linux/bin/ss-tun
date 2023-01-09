@@ -1,16 +1,20 @@
 #!/bin/bash
 
 info() {
-    echo -e "\e[34m$1\e[0m"
+    echo -e "INFO: \e[34m$1\e[0m"
 }
 
 success() {
-    echo -e "\e[32m$1\e[0m"
+    echo -e "SUCCESS: \e[32m$1\e[0m"
 }
 
 error() {
-    echo -e "\n\e[31m$1\e[0m\n"
+    echo -e "\nERROR: \e[31m$1\e[0m\n"
     exit 1
+}
+
+warning() {
+    echo -e "\nWARNING: \e[33m$1\e[0m\n"
 }
 
 is_cmd_exist() {
@@ -20,6 +24,7 @@ is_cmd_exist() {
 }
 
 is_cmd_exist ip
+is_cmd_exist dig
 is_cmd_exist tun2socks
 is_cmd_exist sslocal
 is_cmd_exist jq
@@ -34,6 +39,16 @@ dns_server='1.1.1.1'
 ss_config=/etc/ss-tun/config.json
 ss_server=$(jq '.server' <"$ss_config" | tr -d '"')
 ss_port=$(jq '.local_port' <"$ss_config")
+ss_server_port=$(jq '.server_port' <"$ss_config")
+ss_cipher=$(jq '.method' <"$ss_config" | tr -d '"')
+ss_password=$(jq '.password' <"$ss_config" | tr -d '"')
+
+# if shadowsocks server is a domain name, resolv it as IPv4 address
+ss_server_ip=$(dig +short "${ss_server}" A | grep -v '\.$')
+[[ -n "$ss_server_ip" ]] && {
+    ss_server="$ss_server_ip"
+    echo "Shadowsocks server name resolved as: $ss_server"
+}
 info "ss_server=$ss_server\nss_port=$ss_port"
 
 [[ "$1" = "stop" ]] && {
@@ -56,7 +71,8 @@ info "ss_server=$ss_server\nss_port=$ss_port"
 
 # start the proxy
 (
-    /usr/local/bin/sslocal -c "$ss_config" &
+    /usr/local/bin/sslocal -s "$ss_server:$ss_server_port" -k "$ss_password" \
+        -m "$ss_cipher" -b "127.0.0.1:$ss_port" -U &
     echo -ne "$!" >/tmp/sslocal.pid
 ) || {
     error "sslocal failed to run"
@@ -64,7 +80,7 @@ info "ss_server=$ss_server\nss_port=$ss_port"
 
 # start tun2socks
 (
-    tun2socks -device tun://tun114514 -proxy "socks5://127.0.0.1:$ss_port" &
+    tun2socks -loglevel error -device tun://tun114514 -proxy "socks5://127.0.0.1:$ss_port" &
     echo -ne "$!" >/tmp/tun2socks.pid
 ) || {
     error "tun2socks failed to run"
@@ -90,7 +106,7 @@ echo -n "nameserver $dns_server" | resolvconf -a tun114514
 ip route add 10.0.0.0/8 via "$gw"
 ip route add 192.168.0.0/16 via "$gw"
 ip route add 172.16.0.0/12 via "$gw"
-ip route add "$ss_server/32" via "$gw" || error "failed to add $ss_server route"
+ip route add "$ss_server/32" via "$gw" || warning "failed to add $ss_server route"
 
 # tun114514 as default route
 (ip route add '0.0.0.0/1' via "$tun_ip" dev tun114514 &&
