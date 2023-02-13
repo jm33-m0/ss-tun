@@ -45,12 +45,16 @@ ss_cipher=$(jq '.method' <"$ss_config" | tr -d '"')
 ss_password=$(jq '.password' <"$ss_config" | tr -d '"')
 
 # if shadowsocks server is a domain name, resolv it as IPv4 address
-ss_server_ip=$(dig +short "${ss_server}" A | grep -v '\.$')
+ss_server_ip=$(dig @223.5.5.5 +short "${ss_server}" A | grep -v '\.$')
 [[ -n "$ss_server_ip" ]] && {
     ss_server="$ss_server_ip"
     echo "Shadowsocks server name resolved as: $ss_server"
 }
 info "ss_server=$ss_server\nss_port=$ss_port"
+[[ -z "$ss_server_ip" ]] && {
+    echo "ERROR: cannot resolve Shadowsocks server name"
+    exit 1
+}
 
 [[ "$1" = "stop" ]] && {
     kill "$(cat /tmp/sslocal.pid)" 2>/dev/null || pkill -9 sslocal
@@ -104,7 +108,7 @@ ip addr add "$tun_ip/32" dev tun114514 || {
 echo -n "nameserver $dns_server" | resolvconf -a tun114514 || error "Failed to set DNS to '$dns_server'"
 
 # bypass LAN
-ip route add 10.0.0.0/8 via "$gw"
+# ip route add 10.0.0.0/8 via "$gw"
 ip route add 192.168.0.0/16 via "$gw"
 ip route add 172.16.0.0/12 via "$gw"
 ip route add "$ss_server/32" via "$gw" || warning "failed to add $ss_server route"

@@ -24,10 +24,6 @@ is_cmd_exist() {
 is_cmd_exist ip
 is_cmd_exist systemctl
 
-(
-    apt install jq curl resolvconf bind9-dnsutils -y || yum install -y curl jq resolvconf
-) || error "failed to install jq/curl"
-
 (cp -avR ./bin/* /usr/local/bin && chmod 755 /usr/local/bin/*) || error "failed to install binaries"
 
 (
